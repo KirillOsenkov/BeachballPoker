@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Media;
 using Newtonsoft.Json;
 
 namespace BeachballPoker
@@ -22,6 +25,30 @@ namespace BeachballPoker
 
         [JsonProperty("children")]
         public List<Frame> Children { get; } = new List<Frame>();
+
+        public int TotalValue { get; set; }
+        public double Ratio { get; set; }
+
+        public void Compute()
+        {
+            int sum = Value;
+
+            foreach (var item in Children)
+            {
+                item.Compute();
+                sum += item.TotalValue;
+            }
+
+            TotalValue = sum;
+            var childSum = sum - Value;
+            if (childSum > 0)
+            {
+                foreach (var item in Children)
+                {
+                    item.Ratio = item.TotalValue / (double)childSum;
+                }
+            }
+        }
 
         public static Frame OpenFile(string filePath)
         {
@@ -91,6 +118,7 @@ namespace BeachballPoker
                     });
                 }
 
+                rootFrame.Compute();
                 return rootFrame;
             }
         }
@@ -117,19 +145,69 @@ namespace BeachballPoker
             var frameTemplate = new HierarchicalDataTemplate();
             frameTemplate.ItemsSource = new Binding(nameof(Frame.Children));
             frameTemplate.DataType = typeof(Frame);
-            var stackPanelFactory = new FrameworkElementFactory(typeof(StackPanel));
-            stackPanelFactory.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+
+            var panelFactory = new FrameworkElementFactory(typeof(Grid));
+
+            var progressFactory = new FrameworkElementFactory(typeof(ProgressBar));
+            progressFactory.SetValue(FrameworkElement.WidthProperty, 600.0);
+            progressFactory.SetValue(ProgressBar.BackgroundProperty, Brushes.Transparent);
+            progressFactory.SetValue(ProgressBar.BorderBrushProperty, Brushes.Transparent);
+            progressFactory.SetValue(ProgressBar.MinimumProperty, 0.0);
+            progressFactory.SetValue(ProgressBar.MaximumProperty, 1.0);
+            progressFactory.SetValue(ProgressBar.OpacityProperty, 0.2);
+            progressFactory.SetValue(ProgressBar.HorizontalAlignmentProperty, HorizontalAlignment.Left);
+            progressFactory.SetBinding(ProgressBar.ValueProperty, new Binding(nameof(Frame.Ratio)));
+
+            panelFactory.AppendChild(progressFactory);
+
             var textBlockFactory = new FrameworkElementFactory(typeof(TextBlock));
             textBlockFactory.SetBinding(TextBlock.TextProperty, new Binding(nameof(Frame.Name)));
-            stackPanelFactory.AppendChild(textBlockFactory);
-            frameTemplate.VisualTree = stackPanelFactory;
+            panelFactory.AppendChild(textBlockFactory);
+
+            frameTemplate.VisualTree = panelFactory;
 
             tree.Resources.Add(typeof(Frame), frameTemplate);
             tree.ItemTemplate = frameTemplate;
 
+            var treeViewItemStyle = new Style(typeof(TreeViewItem));
+            treeViewItemStyle.Setters.Add(new EventSetter(TreeViewItem.ExpandedEvent, (RoutedEventHandler)OnTreeViewItemExpanded));
+
+            tree.ItemContainerStyle = treeViewItemStyle;
+
             grid.Children.Add(tree);
 
             return grid;
+        }
+
+        private void OnTreeViewItemExpanded(object sender, RoutedEventArgs args)
+        {
+            if (sender is TreeViewItem item)
+            {
+                foreach (var child in item.Items.OfType<Frame>())
+                {
+                    if (child.Ratio > 0.5)
+                    {
+                        EventHandler handler = null;
+                        handler = (s, e) =>
+                        {
+                            if (item.ItemContainerGenerator.Status != GeneratorStatus.ContainersGenerated)
+                            {
+                                return;
+                            }
+
+                            item.ItemContainerGenerator.StatusChanged -= handler;
+
+                            var childContainer = item.ItemContainerGenerator.ContainerFromItem(child);
+                            var childTreeViewItem = childContainer as TreeViewItem;
+                            if (childTreeViewItem != null && !childTreeViewItem.IsExpanded)
+                            {
+                                childTreeViewItem.IsExpanded = true;
+                            }
+                        };
+                        item.ItemContainerGenerator.StatusChanged += handler;
+                    }
+                }
+            }
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
