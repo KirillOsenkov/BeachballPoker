@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net50</TargetFramework>
+    <OutputType>winexe</OutputType>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+</Project>
