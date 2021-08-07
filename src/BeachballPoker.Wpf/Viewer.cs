@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
 using Newtonsoft.Json;
 
 namespace BeachballPoker
@@ -20,25 +22,8 @@ namespace BeachballPoker
 
         [JsonProperty("children")]
         public List<Frame> Children { get; } = new List<Frame>();
-    }
 
-    public class Viewer
-    {
-        public Viewer(Window window)
-        {
-            Window = window;
-            window.Loaded += Window_Loaded;
-        }
-
-        private void Window_Loaded(object sender, RoutedEventArgs e)
-        {
-            if (FilePath != null)
-            {
-                var frame = Open(FilePath);
-            }
-        }
-
-        private Frame Open(string filePath)
+        public static Frame OpenFile(string filePath)
         {
             var rx2 = new Regex(@"^([ +!:|]+)([0-9]+) (.*)", RegexOptions.Compiled);
             var stack = new Stack<Frame>();
@@ -85,14 +70,14 @@ namespace BeachballPoker
                     }
 
                     stack.Push(currentFrame);
-                    
+
                     if (maxDepth < stack.Count)
                     {
                         maxDepth = stack.Count;
                     }
 
                     currentFrame.Value -= count;
-                    
+
                     if (currentFrame.Value < 0 && currentFrame.Name != null)
                     {
                         throw new Exception();
@@ -107,6 +92,52 @@ namespace BeachballPoker
                 }
 
                 return rootFrame;
+            }
+        }
+    }
+
+    public class Viewer
+    {
+        public Viewer(Window window)
+        {
+            Window = window;
+            window.Loaded += Window_Loaded;
+            window.Content = GetContent();
+        }
+
+        public TreeView tree;
+
+        private object GetContent()
+        {
+            var grid = new Grid();
+
+            tree = new TreeView();
+            tree.Margin = new Thickness(11);
+
+            var frameTemplate = new HierarchicalDataTemplate();
+            frameTemplate.ItemsSource = new Binding(nameof(Frame.Children));
+            frameTemplate.DataType = typeof(Frame);
+            var stackPanelFactory = new FrameworkElementFactory(typeof(StackPanel));
+            stackPanelFactory.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+            var textBlockFactory = new FrameworkElementFactory(typeof(TextBlock));
+            textBlockFactory.SetBinding(TextBlock.TextProperty, new Binding(nameof(Frame.Name)));
+            stackPanelFactory.AppendChild(textBlockFactory);
+            frameTemplate.VisualTree = stackPanelFactory;
+
+            tree.Resources.Add(typeof(Frame), frameTemplate);
+            tree.ItemTemplate = frameTemplate;
+
+            grid.Children.Add(tree);
+
+            return grid;
+        }
+
+        private void Window_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (FilePath != null)
+            {
+                var frame = Frame.OpenFile(FilePath);
+                tree.ItemsSource = frame.Children;
             }
         }
 
