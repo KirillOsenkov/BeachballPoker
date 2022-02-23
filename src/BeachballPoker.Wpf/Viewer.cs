@@ -29,6 +29,21 @@ namespace BeachballPoker
         public int TotalValue { get; set; }
         public double Ratio { get; set; }
 
+        public void Flatten()
+        {
+            while (Children.Count == 1 && Children[0] is { } child && Name == child.Name)
+            {
+                var grandchildren = child.Children;
+                Children.Clear();
+                Children.AddRange(grandchildren);
+            }
+
+            foreach (var item in Children)
+            {
+                item.Flatten();
+            }
+        }
+
         public void Compute()
         {
             int sum = Value;
@@ -118,6 +133,7 @@ namespace BeachballPoker
                     });
                 }
 
+                rootFrame.Flatten();
                 rootFrame.Compute();
                 return rootFrame;
             }
